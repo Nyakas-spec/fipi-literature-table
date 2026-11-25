@@ -772,23 +772,28 @@
       <div class="space-y-3 pt-1">
         <div class="flex items-center justify-between">
           <span class="text-xs font-bold uppercase tracking-wider" style="color: var(--accent);">☁️ Облачное сохранение по PIN</span>
-          <span class="text-[10px]" style="color: var(--fg-muted);">Через ntfy.sh</span>
+          <span class="text-[10px]" style="color: var(--fg-muted);">Через ntfy (живая синхронизация)</span>
         </div>
 
         <div class="space-y-1.5">
           <label class="block text-xs font-semibold" for="cloud-pin-input">Личный секретный PIN-код или слово</label>
-          <div class="relative">
-            <input id="cloud-pin-input" type="password" placeholder="Например: 7788 или секретное слово" class="w-full rounded-xl border pl-3.5 pr-10 py-2.5 text-sm focus:outline-none focus:ring-2" style="background: var(--bg); border-color: var(--border); color: var(--fg); --tw-ring-color: var(--accent);" />
-            <button id="cloud-pin-toggle-btn" type="button" title="Показать/скрыть PIN" class="absolute right-2.5 top-1/2 -translate-y-1/2 text-sm opacity-60 hover:opacity-100 p-1">👁️</button>
+          <div class="flex gap-2">
+            <div class="relative flex-1">
+              <input id="cloud-pin-input" type="password" placeholder="Например: 7788 или секретное слово" class="w-full rounded-xl border pl-3.5 pr-10 py-2.5 text-sm focus:outline-none focus:ring-2" style="background: var(--bg); border-color: var(--border); color: var(--fg); --tw-ring-color: var(--accent);" />
+              <button id="cloud-pin-toggle-btn" type="button" title="Показать/скрыть PIN" class="absolute right-2.5 top-1/2 -translate-y-1/2 text-sm opacity-60 hover:opacity-100 p-1">👁️</button>
+            </div>
+            <button id="cloud-connect-btn" type="button" title="Подключить PIN и синхронизировать" class="px-3 py-2.5 rounded-xl text-xs font-semibold whitespace-nowrap transition-transform active:scale-95 shadow-sm" style="background: var(--accent); color: var(--accent-fg);">
+              Синхронизировать
+            </button>
           </div>
           <p class="text-[11px] leading-tight" style="color: var(--fg-muted);">
-            Один и тот же PIN на компьютере и телефоне изолирует ваши данные персональным шифром.
+            Один и тот же PIN на компьютере и телефоне объединяет устройства живой онлайн-синхронизацией.
           </p>
         </div>
 
         <label class="flex items-center gap-2 text-xs cursor-pointer select-none">
           <input id="cloud-autosync-toggle" type="checkbox" class="rounded accent-amber-600" />
-          <span>Автосохранение в облако при изменении статусов</span>
+          <span>Живая автосинхронизация при любых изменениях</span>
         </label>
 
         <div id="cloud-sync-status-text" class="text-xs p-2.5 rounded-xl border flex items-center gap-2" style="background: var(--bg); border-color: var(--border); color: var(--fg-muted);">
@@ -7212,16 +7217,31 @@ ${paragraph}
       }
     }
 
-    // Personal Cloud Sync (PIN-isolated + Instant URL/QR Sync)
-    const CLOUD_PIN_KEY = "fipi_cloud_pin";
-    const CLOUD_AUTO_KEY = "fipi_cloud_autosync";
-    const CLOUD_ENDPOINT = "https://ntfy.sh";
-    let cloudSyncTimer = null;
+    // Personal Cloud Sync (PIN-isolated + Instant URL/QR Sync + Realtime SSE Stream)
+    var CLOUD_PIN_KEY = "fipi_cloud_pin";
+    var CLOUD_AUTO_KEY = "fipi_cloud_autosync";
+    var CLOUD_ENDPOINTS = [
+      "https://ntfy.sh",
+      "https://ntfy.envs.net"
+    ];
+    var cloudSyncTimer = null;
+    var cloudEventSource = null;
+    var lastLocalSyncTime = 0;
+    var userHasLocalEdits = false;
+    var isApplyingRemoteSync = false;
+
+    function getBaseAppUrl() {
+      if (typeof window !== "undefined" && window.location && window.location.protocol && window.location.protocol.startsWith("http")) {
+        return window.location.origin + window.location.pathname;
+      }
+      return "https://nyakas-spec.github.io/fipi-literature-table/";
+    }
 
     function hashPin(pin) {
-      let h1 = 0xdeadbeef ^ pin.length;
-      let h2 = 0x41c6ce57 ^ pin.length;
-      const salted = "fipi_nyakas_personal_" + pin;
+      const trimmed = (pin || "").trim();
+      let h1 = 0xdeadbeef ^ trimmed.length;
+      let h2 = 0x41c6ce57 ^ trimmed.length;
+      const salted = "fipi_nyakas_personal_" + trimmed;
       for (let i = 0; i < salted.length; i++) {
         const ch = salted.charCodeAt(i);
         h1 = Math.imul(h1 ^ ch, 2654435761);
@@ -7239,7 +7259,7 @@ ${paragraph}
       const statusEl = document.getElementById("cloud-sync-status-text");
 
       const dotClass = "w-2 h-2 rounded-full " + (
-        mode === "ok" ? "bg-emerald-500" :
+        mode === "ok" ? "bg-emerald-500 shadow-sm" :
         mode === "syncing" ? "bg-amber-400 animate-pulse" :
         mode === "err" ? "bg-rose-500" : "bg-gray-400"
       );
@@ -7260,7 +7280,8 @@ ${paragraph}
       try { draft = localStorage.getItem(DRAFT_KEY) || ""; } catch(e) {}
       const pin = ((() => { try { return localStorage.getItem(CLOUD_PIN_KEY); } catch(e) { return null; } })() || "").trim();
       const customWorks = works.filter(w => !DEFAULT_PRO_WORKS.some(dw => dw.id === w.id));
-      return { v: 1, pin, statuses, customWorks, draft, updatedAt: Date.now() };
+      const payloadTime = userHasLocalEdits ? lastLocalSyncTime : Date.now();
+      return { v: 1, pin, statuses, customWorks, draft, updatedAt: payloadTime };
     }
 
     function encodeSyncPayload(payload) {
@@ -7282,8 +7303,12 @@ ${paragraph}
       }
     }
 
-    function applySyncPayload(payload) {
+    function applySyncPayload(payload, isRemote = false) {
       if (!payload || (!payload.statuses && !payload.s)) return false;
+      if (isRemote && userHasLocalEdits && payload.updatedAt && payload.updatedAt < lastLocalSyncTime - 1000) {
+        return false;
+      }
+      isApplyingRemoteSync = true;
       let changed = false;
       const statusMap = payload.statuses || payload.s || {};
       works.forEach(w => {
@@ -7308,27 +7333,31 @@ ${paragraph}
       }
 
       // Restore draft
-      if (typeof payload.draft === "string" && payload.draft.length > 0) {
-        try { localStorage.setItem(DRAFT_KEY, payload.draft); } catch(e) {}
-        const draftEl = document.getElementById("draft-textarea");
-        if (draftEl) {
-          draftEl.value = payload.draft;
-          if (typeof updateWordCount === "function") updateWordCount();
+      if (typeof payload.draft === "string") {
+        const currentDraft = (() => { try { return localStorage.getItem(DRAFT_KEY) || ""; } catch(e) { return ""; } })();
+        if (payload.draft !== currentDraft) {
+          try { localStorage.setItem(DRAFT_KEY, payload.draft); } catch(e) {}
+          const draftEl = document.getElementById("draft-textarea");
+          if (draftEl && draftEl.value !== payload.draft) {
+            draftEl.value = payload.draft;
+            if (typeof updateWordCount === "function") updateWordCount();
+          }
         }
       }
 
       // Restore PIN if provided in sync link
-      if (payload.pin && typeof payload.pin === "string") {
+      if (payload.pin && typeof payload.pin === "string" && payload.pin.trim()) {
         try { localStorage.setItem(CLOUD_PIN_KEY, payload.pin.trim()); } catch(e) {}
         const pinInput = document.getElementById("cloud-pin-input");
         if (pinInput) pinInput.value = payload.pin.trim();
-        setCloudStatus("ok", "Статус: подключён PIN " + payload.pin.trim());
       }
 
       if (changed) {
         try { localStorage.setItem(STORAGE_KEY, JSON.stringify(works)); } catch(e) {}
+        render();
       }
-      render();
+      if (payload.updatedAt) lastLocalSyncTime = Math.max(lastLocalSyncTime, payload.updatedAt);
+      isApplyingRemoteSync = false;
       refreshModalSyncLink();
       return true;
     }
@@ -7336,7 +7365,9 @@ ${paragraph}
     function generateSyncUrl() {
       const payload = buildSyncPayload();
       const b64 = encodeSyncPayload(payload);
-      return window.location.origin + window.location.pathname + "#sync=" + b64;
+      const base = getBaseAppUrl();
+      const sep = (base.endsWith("/") || base.endsWith(".html")) ? "" : "/";
+      return base + sep + "#sync=" + b64;
     }
 
     function refreshModalSyncLink() {
@@ -7345,7 +7376,7 @@ ${paragraph}
       if (linkInput) linkInput.value = url;
       const qrImg = document.getElementById("cloud-qr-img");
       if (qrImg) {
-        qrImg.src = "https://api.qrserver.com/v1/create-qr-code/?size=160x160&data=" + encodeURIComponent(url);
+        qrImg.src = "https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=" + encodeURIComponent(url);
       }
     }
 
@@ -7363,7 +7394,29 @@ ${paragraph}
       prompt("Скопируйте ссылку для переноса прогресса:", text);
     }
 
+    async function parseNtfyMessage(rawMsg) {
+      if (!rawMsg) return null;
+      try {
+        if (rawMsg.attachment && rawMsg.attachment.url) {
+          try {
+            const attRes = await fetch(rawMsg.attachment.url);
+            if (attRes.ok) {
+              const attText = await attRes.text();
+              const parsed = JSON.parse(attText);
+              if (parsed && (parsed.statuses || parsed.s)) return parsed;
+            }
+          } catch(e) {}
+        }
+        if (rawMsg.message) {
+          const parsed = JSON.parse(rawMsg.message);
+          if (parsed && (parsed.statuses || parsed.s)) return parsed;
+        }
+      } catch(e) {}
+      return null;
+    }
+
     async function pushToCloud(silent = false) {
+      if (isApplyingRemoteSync) return false;
       const pin = ((() => { try { return localStorage.getItem(CLOUD_PIN_KEY); } catch(e) { return null; } })() || "").trim();
       if (!pin) {
         if (!silent) showToast("⚠️ Сначала введите личный PIN-код");
@@ -7372,18 +7425,34 @@ ${paragraph}
       setCloudStatus("syncing", "Статус: сохранение в облако...");
       const topic = hashPin(pin);
       const payload = buildSyncPayload();
-      try {
-        const res = await fetch(`${CLOUD_ENDPOINT}/${topic}`, {
-          method: "POST",
-          headers: { "Title": "FIPI Sync", "X-Cache": "yes" },
-          body: JSON.stringify(payload)
-        });
-        if (!res.ok) throw new Error("HTTP " + res.status);
+      const body = JSON.stringify(payload);
+
+      let success = false;
+      for (const endpoint of CLOUD_ENDPOINTS) {
+        try {
+          const controller = new AbortController();
+          const timeoutId = setTimeout(() => controller.abort(), 6000);
+          const res = await fetch(`${endpoint}/${topic}`, {
+            method: "POST",
+            headers: { "Title": "FIPI Sync", "X-Cache": "yes" },
+            body: body,
+            signal: controller.signal
+          });
+          clearTimeout(timeoutId);
+          if (res.ok) {
+            success = true;
+            break;
+          }
+        } catch(e) {}
+      }
+
+      if (success) {
         setCloudStatus("ok", "Статус: синхронизировано (" + new Date().toLocaleTimeString() + ")");
         if (!silent) showToast("☁️ Прогресс сохранён в облако!");
         refreshModalSyncLink();
+        ensureLiveStream(topic);
         return true;
-      } catch (e) {
+      } else {
         setCloudStatus("err", "Статус: ошибка сети (используйте QR или ссылку)");
         if (!silent) showToast("⚠️ Нет связи с облаком (используйте QR/ссылку)");
         return false;
@@ -7398,61 +7467,111 @@ ${paragraph}
       }
       setCloudStatus("syncing", "Статус: загрузка из облака...");
       const topic = hashPin(pin);
-      try {
-        let latestPayload = null;
-        for (let attempt = 1; attempt <= 3; attempt++) {
-          const res = await fetch(`${CLOUD_ENDPOINT}/${topic}/json?poll=1&since=all`);
-          if (!res.ok) throw new Error("HTTP " + res.status);
-          const text = await res.text();
-          const lines = text.trim().split("\n").filter(Boolean);
-          for (let i = lines.length - 1; i >= 0; i--) {
-            try {
-              const msg = JSON.parse(lines[i]);
-              if (msg && msg.message) {
-                const parsed = JSON.parse(msg.message);
-                if (parsed && (parsed.statuses || parsed.s)) {
+
+      let latestPayload = null;
+      for (const endpoint of CLOUD_ENDPOINTS) {
+        for (let attempt = 1; attempt <= 2; attempt++) {
+          try {
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 5000);
+            const res = await fetch(`${endpoint}/${topic}/json?poll=1&since=all`, { signal: controller.signal });
+            clearTimeout(timeoutId);
+            if (!res.ok) continue;
+            const text = await res.text();
+            const lines = text.trim().split("\n").filter(Boolean);
+            for (let i = lines.length - 1; i >= 0; i--) {
+              try {
+                const msg = JSON.parse(lines[i]);
+                const parsed = await parseNtfyMessage(msg);
+                if (parsed) {
                   latestPayload = parsed;
                   break;
                 }
-              }
-            } catch(err) {}
-          }
+              } catch(err) {}
+            }
+          } catch(e) {}
           if (latestPayload) break;
-          if (attempt < 3) await new Promise(r => setTimeout(r, 600));
+          if (attempt < 2) await new Promise(r => setTimeout(r, 400));
         }
+        if (latestPayload) break;
+      }
 
-        if (latestPayload) {
-          applySyncPayload(latestPayload);
-          setCloudStatus("ok", "Статус: загружено (" + new Date().toLocaleTimeString() + ")");
-          if (!silent) showToast("☁️ Прогресс загружен из облака!");
-          return true;
-        } else {
-          setCloudStatus("ok", "Статус: в облаке нет данных (>12ч). Используйте QR или ссылку");
-          if (!silent) showToast("ℹ️ В облаке нет свежих данных (сохраните заново или используйте QR)");
-          return false;
-        }
-      } catch (e) {
-        setCloudStatus("err", "Статус: ошибка сети");
-        if (!silent) showToast("⚠️ Не удалось загрузить из облака");
+      if (latestPayload) {
+        applySyncPayload(latestPayload, true);
+        setCloudStatus("ok", "Статус: загружено (" + new Date().toLocaleTimeString() + ")");
+        if (!silent) showToast("☁️ Прогресс загружен из облака!");
+        ensureLiveStream(topic);
+        return true;
+      } else {
+        setCloudStatus("ok", "Статус: в облаке нет данных (>12ч). Используйте QR или ссылку");
+        if (!silent) showToast("ℹ️ В облаке нет свежих данных (сохраните заново или используйте QR)");
+        ensureLiveStream(topic);
         return false;
       }
     }
 
+    function ensureLiveStream(topic) {
+      if (typeof EventSource === "undefined") return;
+      if (cloudEventSource && cloudEventSource.readyState !== EventSource.CLOSED) return;
+
+      try {
+        const url = `${CLOUD_ENDPOINTS[0]}/${topic}/sse`;
+        cloudEventSource = new EventSource(url);
+        cloudEventSource.onopen = () => {
+          setCloudStatus("ok", "Статус: подключён онлайн (" + new Date().toLocaleTimeString() + ")");
+        };
+        cloudEventSource.onmessage = async (e) => {
+          try {
+            const msg = JSON.parse(e.data);
+            const parsed = await parseNtfyMessage(msg);
+            if (parsed && applySyncPayload(parsed, true)) {
+              setCloudStatus("ok", "Статус: обновлено онлайн (" + new Date().toLocaleTimeString() + ")");
+              showToast("☁️ Прогресс синхронизирован онлайн!");
+            }
+          } catch(err) {}
+        };
+        cloudEventSource.onerror = () => {
+          if (cloudEventSource) {
+            cloudEventSource.close();
+            cloudEventSource = null;
+          }
+        };
+      } catch(e) {}
+    }
+
     function scheduleAutoSync() {
+      if (typeof isApplyingRemoteSync !== "undefined" && isApplyingRemoteSync) return;
+      userHasLocalEdits = true;
+      lastLocalSyncTime = Date.now();
       const auto = (() => { try { return localStorage.getItem(CLOUD_AUTO_KEY); } catch(e) { return null; } })() !== "false";
       const pin = ((() => { try { return localStorage.getItem(CLOUD_PIN_KEY); } catch(e) { return null; } })() || "").trim();
       if (!auto || !pin) return;
       clearTimeout(cloudSyncTimer);
-      cloudSyncTimer = setTimeout(() => { pushToCloud(true); }, 1500);
+      cloudSyncTimer = setTimeout(() => { pushToCloud(true); }, 1200);
     }
 
+    let urlHashWasApplied = false;
     function checkUrlSyncHash() {
       if (window.location.hash && (window.location.hash.startsWith("#sync=") || window.location.hash.startsWith("sync="))) {
         const payload = decodeSyncHash(window.location.hash);
-        if (payload && applySyncPayload(payload)) {
-          history.replaceState(null, "", window.location.pathname + window.location.search);
-          showToast("✅ Прогресс перенесён по ссылке!");
+        if (payload && applySyncPayload(payload, false)) {
+          urlHashWasApplied = true;
+          try {
+            history.replaceState(null, "", window.location.pathname + window.location.search);
+          } catch(e) {}
+          showToast("✅ Прогресс успешно перенесён!");
+          if (payload.pin) {
+            setTimeout(() => { pushToCloud(true); }, 600);
+          }
         }
+      }
+    }
+
+    function closeCloudModal() {
+      const modal = document.getElementById("cloud-modal");
+      if (modal) {
+        modal.classList.add("hidden");
+        modal.classList.remove("flex");
       }
     }
 
@@ -7479,6 +7598,7 @@ ${paragraph}
       const closeBtn = document.getElementById("close-cloud-modal-btn");
       const pinInput = document.getElementById("cloud-pin-input");
       const pinToggleBtn = document.getElementById("cloud-pin-toggle-btn");
+      const connectBtn = document.getElementById("cloud-connect-btn");
       const autoToggle = document.getElementById("cloud-autosync-toggle");
       const pushBtn = document.getElementById("cloud-push-btn");
       const pullBtn = document.getElementById("cloud-pull-btn");
@@ -7492,6 +7612,18 @@ ${paragraph}
           if (val) setCloudStatus("ok", "Статус: PIN сохранён");
           else setCloudStatus("idle", "Статус: введите PIN-код");
           refreshModalSyncLink();
+        });
+        pinInput.addEventListener("keydown", e => {
+          if (e.key === "Enter") {
+            e.preventDefault();
+            pullFromCloud(false);
+          }
+        });
+      }
+
+      if (connectBtn) {
+        connectBtn.addEventListener("click", () => {
+          pullFromCloud(false);
         });
       }
 
@@ -7509,22 +7641,18 @@ ${paragraph}
         });
       }
 
-      if (btn && modal) {
-        btn.addEventListener("click", openCloudModal);
+      if (btn) btn.addEventListener("click", openCloudModal);
+      if (closeBtn) closeBtn.addEventListener("click", closeCloudModal);
+
+      if (modal) {
+        modal.addEventListener("click", e => {
+          if (e.target === modal) closeCloudModal();
+        });
       }
 
-      if (closeBtn && modal) {
-        closeBtn.addEventListener("click", () => {
-          modal.classList.add("hidden");
-          modal.classList.remove("flex");
-        });
-        modal.addEventListener("click", e => {
-          if (e.target === modal) {
-            modal.classList.add("hidden");
-            modal.classList.remove("flex");
-          }
-        });
-      }
+      document.addEventListener("keydown", e => {
+        if (e.key === "Escape") closeCloudModal();
+      });
 
       if (pushBtn) pushBtn.addEventListener("click", () => pushToCloud(false));
       if (pullBtn) pullBtn.addEventListener("click", () => pullFromCloud(false));
@@ -7543,13 +7671,36 @@ ${paragraph}
       }
 
       checkUrlSyncHash();
+
       const savedPin = ((() => { try { return localStorage.getItem(CLOUD_PIN_KEY); } catch(e) { return null; } })() || "").trim();
       if (savedPin) {
+        const topic = hashPin(savedPin);
         setCloudStatus("ok", "Статус: PIN активен (" + savedPin + ")");
-        if ((() => { try { return localStorage.getItem(CLOUD_AUTO_KEY); } catch(e) { return null; } })() !== "false") {
+        ensureLiveStream(topic);
+        if (!urlHashWasApplied && (() => { try { return localStorage.getItem(CLOUD_AUTO_KEY); } catch(e) { return null; } })() !== "false") {
           pullFromCloud(true);
         }
       }
+
+      document.addEventListener("visibilitychange", () => {
+        if (document.visibilityState === "visible") {
+          const p = ((() => { try { return localStorage.getItem(CLOUD_PIN_KEY); } catch(e) { return null; } })() || "").trim();
+          if (p) {
+            ensureLiveStream(hashPin(p));
+            if ((() => { try { return localStorage.getItem(CLOUD_AUTO_KEY); } catch(e) { return null; } })() !== "false") {
+              pullFromCloud(true);
+            }
+          }
+        }
+      });
+
+      window.addEventListener("focus", () => {
+        const p = ((() => { try { return localStorage.getItem(CLOUD_PIN_KEY); } catch(e) { return null; } })() || "").trim();
+        if (p && (() => { try { return localStorage.getItem(CLOUD_AUTO_KEY); } catch(e) { return null; } })() !== "false") {
+          pullFromCloud(true);
+        }
+      });
+
       refreshModalSyncLink();
     }
 initCloudSync();
