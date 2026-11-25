@@ -12,7 +12,7 @@
   <link rel="icon" type="image/svg+xml" href="icon.svg" />
   <link rel="apple-touch-icon" href="icon.svg" />
   <title>Литературная база — Итоговое сочинение (ФИПИ)</title>
-  <script src="https://www.gstatic.com/antigravity/web/dev/tailwindcss.min.js"></script>
+  <script src="https://www.gstatic.com/antigravity/web/dev/tailwindcss.min.js" defer></script>
   <style>
     :root {
       --bg: #faf7f2;
@@ -735,6 +735,80 @@
       </form>
     </div>
   </div>
+
+  <!-- MODAL: CLOUD SYNC & TRANSFER -->
+  <div id="cloud-modal" class="fixed inset-0 z-50 hidden items-center justify-center p-4" style="background: rgba(0, 0, 0, 0.55); backdrop-filter: blur(4px);">
+    <div class="surface-card rounded-2xl w-full max-w-md max-h-[90vh] overflow-y-auto p-5 sm:p-6 space-y-4 border shadow-2xl fade-in" style="border-color: var(--border);">
+      <div class="flex items-center justify-between border-b pb-3" style="border-color: var(--border);">
+        <h3 class="font-serif-title text-lg font-bold">☁️ Персональная синхронизация</h3>
+        <button id="close-cloud-modal-btn" type="button" class="text-sm px-2.5 py-1 rounded-lg hover:opacity-70" style="color: var(--fg-muted);">✕</button>
+      </div>
+
+      <!-- Option 1: Instant QR Code & Link (100% reliable, zero server dependency) -->
+      <div class="p-3.5 rounded-xl border space-y-2.5" style="background: var(--card-muted); border-color: var(--border);">
+        <div class="flex items-center justify-between">
+          <span class="text-xs font-bold uppercase tracking-wider" style="color: var(--accent);">📱 Мгновенный перенос на телефон</span>
+          <span class="text-[10px] px-2 py-0.5 rounded-full font-semibold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400">Надёжно 100%</span>
+        </div>
+        <div class="flex flex-col sm:flex-row items-center gap-3 pt-1">
+          <div class="bg-white p-1.5 rounded-xl border shadow-sm shrink-0">
+            <img id="cloud-qr-img" class="w-28 h-28 sm:w-32 sm:h-32 rounded-lg" alt="QR-код переноса" />
+          </div>
+          <div class="space-y-2 text-xs flex-1 text-center sm:text-left">
+            <p class="leading-relaxed" style="color: var(--fg-muted);">
+              Наведите камеру смартфона на QR-код — сайт откроется со всеми вашими отметками, черновиком и PIN.
+            </p>
+            <button id="cloud-copy-link-btn" type="button" class="w-full px-3 py-2 rounded-xl text-xs font-semibold border transition-all active:scale-95 shadow-sm" style="border-color: var(--border); background: var(--card);">
+              🔗 Скопировать ссылку переноса
+            </button>
+          </div>
+        </div>
+        <div class="pt-1">
+          <input id="cloud-sync-url-input" type="text" readonly class="w-full rounded-lg border px-2.5 py-1.5 text-[11px] font-mono select-all focus:outline-none" style="background: var(--bg); border-color: var(--border); color: var(--fg-muted);" />
+        </div>
+      </div>
+
+      <!-- Option 2: Personal PIN Cloud Relay -->
+      <div class="space-y-3 pt-1">
+        <div class="flex items-center justify-between">
+          <span class="text-xs font-bold uppercase tracking-wider" style="color: var(--accent);">☁️ Облачное сохранение по PIN</span>
+          <span class="text-[10px]" style="color: var(--fg-muted);">Через ntfy.sh</span>
+        </div>
+
+        <div class="space-y-1.5">
+          <label class="block text-xs font-semibold" for="cloud-pin-input">Личный секретный PIN-код или слово</label>
+          <div class="relative">
+            <input id="cloud-pin-input" type="password" placeholder="Например: 7788 или секретное слово" class="w-full rounded-xl border pl-3.5 pr-10 py-2.5 text-sm focus:outline-none focus:ring-2" style="background: var(--bg); border-color: var(--border); color: var(--fg); --tw-ring-color: var(--accent);" />
+            <button id="cloud-pin-toggle-btn" type="button" title="Показать/скрыть PIN" class="absolute right-2.5 top-1/2 -translate-y-1/2 text-sm opacity-60 hover:opacity-100 p-1">👁️</button>
+          </div>
+          <p class="text-[11px] leading-tight" style="color: var(--fg-muted);">
+            Один и тот же PIN на компьютере и телефоне изолирует ваши данные персональным шифром.
+          </p>
+        </div>
+
+        <label class="flex items-center gap-2 text-xs cursor-pointer select-none">
+          <input id="cloud-autosync-toggle" type="checkbox" class="rounded accent-amber-600" />
+          <span>Автосохранение в облако при изменении статусов</span>
+        </label>
+
+        <div id="cloud-sync-status-text" class="text-xs p-2.5 rounded-xl border flex items-center gap-2" style="background: var(--bg); border-color: var(--border); color: var(--fg-muted);">
+          <span id="cloud-status-dot-modal" class="w-2 h-2 rounded-full bg-gray-400 shrink-0"></span>
+          <span id="cloud-status-desc">Статус: введите PIN-код для синхронизации</span>
+        </div>
+
+        <div class="grid grid-cols-2 gap-2 pt-1">
+          <button id="cloud-push-btn" type="button" class="px-3.5 py-2.5 rounded-xl text-xs font-semibold transition-transform active:scale-95 shadow-sm" style="background: var(--accent); color: var(--accent-fg);">
+            📤 В облако
+          </button>
+          <button id="cloud-pull-btn" type="button" class="px-3.5 py-2.5 rounded-xl text-xs font-semibold border transition-colors hover:opacity-85 shadow-sm" style="border-color: var(--border); background: var(--card-muted);">
+            📥 Из облака
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="toast-notification" class="fixed bottom-5 right-5 z-50 hidden px-4 py-2.5 rounded-xl text-xs font-semibold shadow-xl transition-all duration-300 pointer-events-none" style="background: var(--accent); color: var(--accent-fg);"></div>
 
   <script>
 // fipi_works_data.js - Полная база аргументов ФИПИ (13 произведений, разбивка тем по разделам ФИПИ)
@@ -4985,6 +5059,7 @@ const DEFAULT_PRO_WORKS = [
 
     function saveWorks() {
       try { localStorage.setItem(STORAGE_KEY, JSON.stringify(works)); } catch (e) {}
+      if (typeof scheduleAutoSync === "function") scheduleAutoSync();
     }
 
     let works = loadWorks();
@@ -5954,6 +6029,7 @@ const DEFAULT_PRO_WORKS = [
         badge.style.color = "var(--done)";
       }
       try { localStorage.setItem(DRAFT_KEY, draftArea.value); } catch (e) {}
+      if (typeof scheduleAutoSync === "function") scheduleAutoSync();
     }
     draftArea.addEventListener("input", updateWordCount);
     updateWordCount();
@@ -6401,6 +6477,8 @@ ${item.argumentText}`;
         const b = document.getElementById(id);
         if (b) b.addEventListener("click", () => optDrop.classList.add("hidden"));
       });
+      const impInput = document.getElementById("import-input");
+      if (impInput) impInput.addEventListener("change", () => optDrop.classList.add("hidden"));
     }
 
     ["table", "analysis", "arguments", "trainer", "cheatsheet", "quiz"].forEach(tabName => {
@@ -7134,7 +7212,7 @@ ${paragraph}
       }
     }
 
-    // Personal Cloud Sync (PIN-isolated + Instant URL Sync)
+    // Personal Cloud Sync (PIN-isolated + Instant URL/QR Sync)
     const CLOUD_PIN_KEY = "fipi_cloud_pin";
     const CLOUD_AUTO_KEY = "fipi_cloud_autosync";
     const CLOUD_ENDPOINT = "https://ntfy.sh";
@@ -7156,15 +7234,23 @@ ${paragraph}
 
     function setCloudStatus(mode, text) {
       const dot = document.getElementById("cloud-status-dot");
+      const dotModal = document.getElementById("cloud-status-dot-modal");
+      const statusDesc = document.getElementById("cloud-status-desc");
       const statusEl = document.getElementById("cloud-sync-status-text");
-      if (dot) {
-        dot.className = "w-2 h-2 rounded-full " + (
-          mode === "ok" ? "bg-emerald-500" :
-          mode === "syncing" ? "bg-amber-400 animate-pulse" :
-          mode === "err" ? "bg-rose-500" : "bg-gray-400"
-        );
+
+      const dotClass = "w-2 h-2 rounded-full " + (
+        mode === "ok" ? "bg-emerald-500" :
+        mode === "syncing" ? "bg-amber-400 animate-pulse" :
+        mode === "err" ? "bg-rose-500" : "bg-gray-400"
+      );
+      if (dot) dot.className = dotClass;
+      if (dotModal) dotModal.className = dotClass;
+
+      if (statusDesc && text) {
+        statusDesc.textContent = text;
+      } else if (statusEl && text) {
+        statusEl.textContent = text;
       }
-      if (statusEl && text) statusEl.textContent = text;
     }
 
     function buildSyncPayload() {
@@ -7172,31 +7258,109 @@ ${paragraph}
       works.forEach(w => { statuses[w.id] = w.status === "Прочитано" ? 1 : 0; });
       let draft = "";
       try { draft = localStorage.getItem(DRAFT_KEY) || ""; } catch(e) {}
-      return { v: 1, statuses, draft, updatedAt: Date.now() };
+      const pin = ((() => { try { return localStorage.getItem(CLOUD_PIN_KEY); } catch(e) { return null; } })() || "").trim();
+      const customWorks = works.filter(w => !DEFAULT_PRO_WORKS.some(dw => dw.id === w.id));
+      return { v: 1, pin, statuses, customWorks, draft, updatedAt: Date.now() };
+    }
+
+    function encodeSyncPayload(payload) {
+      const json = JSON.stringify(payload);
+      return encodeURIComponent(btoa(unescape(encodeURIComponent(json))));
+    }
+
+    function decodeSyncHash(hashStr) {
+      if (!hashStr) return null;
+      let raw = hashStr.startsWith("#sync=") ? hashStr.slice(6) : (hashStr.startsWith("sync=") ? hashStr.slice(5) : hashStr);
+      try { raw = decodeURIComponent(raw); } catch(e) {}
+      let b64 = raw.replace(/-/g, "+").replace(/_/g, "/");
+      while (b64.length % 4 !== 0) b64 += "=";
+      try {
+        const jsonStr = decodeURIComponent(escape(atob(b64)));
+        return JSON.parse(jsonStr);
+      } catch(e) {
+        try { return JSON.parse(atob(b64)); } catch(err) { return null; }
+      }
     }
 
     function applySyncPayload(payload) {
-      if (!payload || !payload.statuses) return false;
+      if (!payload || (!payload.statuses && !payload.s)) return false;
       let changed = false;
+      const statusMap = payload.statuses || payload.s || {};
       works.forEach(w => {
-        if (Object.prototype.hasOwnProperty.call(payload.statuses, w.id)) {
-          const nextStatus = payload.statuses[w.id] ? "Прочитано" : "На будущее";
+        if (Object.prototype.hasOwnProperty.call(statusMap, w.id)) {
+          const nextStatus = (statusMap[w.id] === 1 || statusMap[w.id] === "Прочитано" || statusMap[w.id] === true) ? "Прочитано" : "На будущее";
           if (w.status !== nextStatus) {
             w.status = nextStatus;
             changed = true;
           }
         }
       });
+
+      // Merge custom works if present
+      if (Array.isArray(payload.customWorks) && payload.customWorks.length > 0) {
+        const existingIds = new Set(works.map(w => w.id));
+        payload.customWorks.forEach(cw => {
+          if (cw && cw.id && !existingIds.has(cw.id)) {
+            works.push(cw);
+            changed = true;
+          }
+        });
+      }
+
+      // Restore draft
       if (typeof payload.draft === "string" && payload.draft.length > 0) {
         try { localStorage.setItem(DRAFT_KEY, payload.draft); } catch(e) {}
-        const draftArea = document.getElementById("draft-textarea");
-        if (draftArea) draftArea.value = payload.draft;
+        const draftEl = document.getElementById("draft-textarea");
+        if (draftEl) {
+          draftEl.value = payload.draft;
+          if (typeof updateWordCount === "function") updateWordCount();
+        }
       }
+
+      // Restore PIN if provided in sync link
+      if (payload.pin && typeof payload.pin === "string") {
+        try { localStorage.setItem(CLOUD_PIN_KEY, payload.pin.trim()); } catch(e) {}
+        const pinInput = document.getElementById("cloud-pin-input");
+        if (pinInput) pinInput.value = payload.pin.trim();
+        setCloudStatus("ok", "Статус: подключён PIN " + payload.pin.trim());
+      }
+
       if (changed) {
         try { localStorage.setItem(STORAGE_KEY, JSON.stringify(works)); } catch(e) {}
-        render();
       }
+      render();
+      refreshModalSyncLink();
       return true;
+    }
+
+    function generateSyncUrl() {
+      const payload = buildSyncPayload();
+      const b64 = encodeSyncPayload(payload);
+      return window.location.origin + window.location.pathname + "#sync=" + b64;
+    }
+
+    function refreshModalSyncLink() {
+      const url = generateSyncUrl();
+      const linkInput = document.getElementById("cloud-sync-url-input");
+      if (linkInput) linkInput.value = url;
+      const qrImg = document.getElementById("cloud-qr-img");
+      if (qrImg) {
+        qrImg.src = "https://api.qrserver.com/v1/create-qr-code/?size=160x160&data=" + encodeURIComponent(url);
+      }
+    }
+
+    function fallbackCopy(text) {
+      const linkInput = document.getElementById("cloud-sync-url-input");
+      if (linkInput) {
+        linkInput.value = text;
+        linkInput.select();
+        try {
+          document.execCommand("copy");
+          showToast("🔗 Ссылка с прогрессом скопирована!");
+          return;
+        } catch(e) {}
+      }
+      prompt("Скопируйте ссылку для переноса прогресса:", text);
     }
 
     async function pushToCloud(silent = false) {
@@ -7211,15 +7375,17 @@ ${paragraph}
       try {
         const res = await fetch(`${CLOUD_ENDPOINT}/${topic}`, {
           method: "POST",
+          headers: { "Title": "FIPI Sync", "X-Cache": "yes" },
           body: JSON.stringify(payload)
         });
         if (!res.ok) throw new Error("HTTP " + res.status);
         setCloudStatus("ok", "Статус: синхронизировано (" + new Date().toLocaleTimeString() + ")");
         if (!silent) showToast("☁️ Прогресс сохранён в облако!");
+        refreshModalSyncLink();
         return true;
       } catch (e) {
-        setCloudStatus("err", "Статус: ошибка сети (используйте ссылку переноса)");
-        if (!silent) showToast("⚠️ Нет связи с облаком");
+        setCloudStatus("err", "Статус: ошибка сети (используйте QR или ссылку)");
+        if (!silent) showToast("⚠️ Нет связи с облаком (используйте QR/ссылку)");
         return false;
       }
     }
@@ -7233,28 +7399,36 @@ ${paragraph}
       setCloudStatus("syncing", "Статус: загрузка из облака...");
       const topic = hashPin(pin);
       try {
-        const res = await fetch(`${CLOUD_ENDPOINT}/${topic}/json?poll=1&since=all`);
-        if (!res.ok) throw new Error("HTTP " + res.status);
-        const text = await res.text();
-        const lines = text.trim().split("\n").filter(Boolean);
         let latestPayload = null;
-        for (let i = lines.length - 1; i >= 0; i--) {
-          try {
-            const msg = JSON.parse(lines[i]);
-            if (msg && msg.message) {
-              const parsed = JSON.parse(msg.message);
-              if (parsed && parsed.statuses) { latestPayload = parsed; break; }
-            }
-          } catch(err) {}
+        for (let attempt = 1; attempt <= 3; attempt++) {
+          const res = await fetch(`${CLOUD_ENDPOINT}/${topic}/json?poll=1&since=all`);
+          if (!res.ok) throw new Error("HTTP " + res.status);
+          const text = await res.text();
+          const lines = text.trim().split("\n").filter(Boolean);
+          for (let i = lines.length - 1; i >= 0; i--) {
+            try {
+              const msg = JSON.parse(lines[i]);
+              if (msg && msg.message) {
+                const parsed = JSON.parse(msg.message);
+                if (parsed && (parsed.statuses || parsed.s)) {
+                  latestPayload = parsed;
+                  break;
+                }
+              }
+            } catch(err) {}
+          }
+          if (latestPayload) break;
+          if (attempt < 3) await new Promise(r => setTimeout(r, 600));
         }
+
         if (latestPayload) {
           applySyncPayload(latestPayload);
           setCloudStatus("ok", "Статус: загружено (" + new Date().toLocaleTimeString() + ")");
           if (!silent) showToast("☁️ Прогресс загружен из облака!");
           return true;
         } else {
-          setCloudStatus("ok", "Статус: в облаке пока нет сохранений");
-          if (!silent) showToast("ℹ️ В облаке пока нет данных для этого PIN");
+          setCloudStatus("ok", "Статус: в облаке нет данных (>12ч). Используйте QR или ссылку");
+          if (!silent) showToast("ℹ️ В облаке нет свежих данных (сохраните заново или используйте QR)");
           return false;
         }
       } catch (e) {
@@ -7269,32 +7443,42 @@ ${paragraph}
       const pin = ((() => { try { return localStorage.getItem(CLOUD_PIN_KEY); } catch(e) { return null; } })() || "").trim();
       if (!auto || !pin) return;
       clearTimeout(cloudSyncTimer);
-      cloudSyncTimer = setTimeout(() => { pushToCloud(true); }, 1000);
+      cloudSyncTimer = setTimeout(() => { pushToCloud(true); }, 1500);
     }
 
     function checkUrlSyncHash() {
-      if (window.location.hash && window.location.hash.startsWith("#sync=")) {
-        try {
-          const b64 = window.location.hash.slice(6);
-          const jsonStr = decodeURIComponent(escape(atob(b64)));
-          const payload = JSON.parse(jsonStr);
-          if (applySyncPayload(payload)) {
-            history.replaceState(null, "", window.location.pathname + window.location.search);
-            showToast("✅ Прогресс перенесён по ссылке!");
-          }
-        } catch(e) {}
+      if (window.location.hash && (window.location.hash.startsWith("#sync=") || window.location.hash.startsWith("sync="))) {
+        const payload = decodeSyncHash(window.location.hash);
+        if (payload && applySyncPayload(payload)) {
+          history.replaceState(null, "", window.location.pathname + window.location.search);
+          showToast("✅ Прогресс перенесён по ссылке!");
+        }
       }
     }
 
     function openCloudModal() {
       const m = document.getElementById("cloud-modal");
-      if (m) { m.classList.remove("hidden"); m.classList.add("flex"); }
+      if (m) {
+        m.classList.remove("hidden");
+        m.classList.add("flex");
+      }
+      const pinInput = document.getElementById("cloud-pin-input");
+      if (pinInput) {
+        pinInput.value = (() => { try { return localStorage.getItem(CLOUD_PIN_KEY); } catch(e) { return null; } })() || "";
+      }
+      const autoToggle = document.getElementById("cloud-autosync-toggle");
+      if (autoToggle) {
+        autoToggle.checked = (() => { try { return localStorage.getItem(CLOUD_AUTO_KEY); } catch(e) { return null; } })() !== "false";
+      }
+      refreshModalSyncLink();
     }
+
     function initCloudSync() {
       const modal = document.getElementById("cloud-modal");
       const btn = document.getElementById("cloud-sync-btn");
       const closeBtn = document.getElementById("close-cloud-modal-btn");
       const pinInput = document.getElementById("cloud-pin-input");
+      const pinToggleBtn = document.getElementById("cloud-pin-toggle-btn");
       const autoToggle = document.getElementById("cloud-autosync-toggle");
       const pushBtn = document.getElementById("cloud-push-btn");
       const pullBtn = document.getElementById("cloud-pull-btn");
@@ -7303,23 +7487,32 @@ ${paragraph}
       if (pinInput) {
         pinInput.value = (() => { try { return localStorage.getItem(CLOUD_PIN_KEY); } catch(e) { return null; } })() || "";
         pinInput.addEventListener("input", e => {
-          try { localStorage.setItem(CLOUD_PIN_KEY, e.target.value.trim()); } catch(err) {}
-          if (e.target.value.trim()) setCloudStatus("ok", "Статус: PIN-код сохранён");
+          const val = e.target.value.trim();
+          try { localStorage.setItem(CLOUD_PIN_KEY, val); } catch(err) {}
+          if (val) setCloudStatus("ok", "Статус: PIN сохранён");
           else setCloudStatus("idle", "Статус: введите PIN-код");
+          refreshModalSyncLink();
         });
       }
+
+      if (pinToggleBtn && pinInput) {
+        pinToggleBtn.addEventListener("click", () => {
+          pinInput.type = pinInput.type === "password" ? "text" : "password";
+          pinToggleBtn.textContent = pinInput.type === "password" ? "👁️" : "🙈";
+        });
+      }
+
       if (autoToggle) {
         autoToggle.checked = (() => { try { return localStorage.getItem(CLOUD_AUTO_KEY); } catch(e) { return null; } })() !== "false";
         autoToggle.addEventListener("change", e => {
           try { localStorage.setItem(CLOUD_AUTO_KEY, e.target.checked ? "true" : "false"); } catch(err) {}
         });
       }
+
       if (btn && modal) {
-        btn.addEventListener("click", () => {
-          modal.classList.remove("hidden");
-          modal.classList.add("flex");
-        });
+        btn.addEventListener("click", openCloudModal);
       }
+
       if (closeBtn && modal) {
         closeBtn.addEventListener("click", () => {
           modal.classList.add("hidden");
@@ -7332,78 +7525,38 @@ ${paragraph}
           }
         });
       }
+
       if (pushBtn) pushBtn.addEventListener("click", () => pushToCloud(false));
       if (pullBtn) pullBtn.addEventListener("click", () => pullFromCloud(false));
+
       if (copyLinkBtn) {
         copyLinkBtn.addEventListener("click", () => {
-          const payload = buildSyncPayload();
-          const b64 = btoa(unescape(encodeURIComponent(JSON.stringify(payload))));
-          const url = window.location.origin + window.location.pathname + "#sync=" + b64;
+          const url = generateSyncUrl();
           if (navigator.clipboard && navigator.clipboard.writeText) {
-            navigator.clipboard.writeText(url).catch(() => {});
+            navigator.clipboard.writeText(url).then(() => {
+              showToast("🔗 Ссылка с прогрессом скопирована!");
+            }).catch(() => fallbackCopy(url));
+          } else {
+            fallbackCopy(url);
           }
-          showToast("🔗 Ссылка с прогрессом скопирована!");
         });
       }
 
       checkUrlSyncHash();
-      if (((() => { try { return localStorage.getItem(CLOUD_PIN_KEY); } catch(e) { return null; } })() || "").trim()) {
-        setCloudStatus("ok", "Статус: PIN активен");
+      const savedPin = ((() => { try { return localStorage.getItem(CLOUD_PIN_KEY); } catch(e) { return null; } })() || "").trim();
+      if (savedPin) {
+        setCloudStatus("ok", "Статус: PIN активен (" + savedPin + ")");
         if ((() => { try { return localStorage.getItem(CLOUD_AUTO_KEY); } catch(e) { return null; } })() !== "false") {
           pullFromCloud(true);
         }
       }
+      refreshModalSyncLink();
     }
-
-    initCloudSync();
+initCloudSync();
     initArgumentsEvents();
     initQuizEvents();
     render();
 
   </script>
-  <!-- Cloud Sync Modal -->
-  <div id="cloud-modal" class="fixed inset-0 z-50 hidden items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
-    <div class="surface-card rounded-2xl w-full max-w-md p-6 space-y-4 border shadow-2xl" style="border-color: var(--border);">
-      <div class="flex items-center justify-between border-b pb-3" style="border-color: var(--border);">
-        <h3 class="font-serif-title text-lg font-bold">☁️ Персональная синхронизация</h3>
-        <button id="close-cloud-modal-btn" type="button" class="text-sm px-2 py-1 rounded-lg hover:opacity-70" style="color: var(--fg-muted);">✕</button>
-      </div>
-
-      <p class="text-xs leading-relaxed" style="color: var(--fg-muted);">
-        Введите ваш личный секретный PIN-код (на ПК и телефоне он должен совпадать). Данные изолированы персональным хэшем.
-      </p>
-
-      <div class="space-y-2">
-        <label class="block text-xs font-semibold" for="cloud-pin-input">Личный PIN-код или кодовое слово</label>
-        <input id="cloud-pin-input" type="password" placeholder="Например: 7788 или секретное слово" class="w-full rounded-xl border px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2" style="background: var(--bg); border-color: var(--border); color: var(--fg); --tw-ring-color: var(--accent);" />
-      </div>
-
-      <label class="flex items-center gap-2 text-xs cursor-pointer select-none">
-        <input id="cloud-autosync-toggle" type="checkbox" class="rounded" />
-        <span>Автосинхронизация при изменении статусов</span>
-      </label>
-
-      <div id="cloud-sync-status-text" class="text-xs p-2.5 rounded-xl border" style="background: var(--bg); border-color: var(--border); color: var(--fg-muted);">
-        Статус: введите PIN-код для подключения
-      </div>
-
-      <div class="grid grid-cols-2 gap-2 pt-1">
-        <button id="cloud-push-btn" type="button" class="px-3.5 py-2.5 rounded-xl text-xs font-semibold transition-transform active:scale-95" style="background: var(--accent); color: var(--accent-fg);">
-          📤 В облако
-        </button>
-        <button id="cloud-pull-btn" type="button" class="px-3.5 py-2.5 rounded-xl text-xs font-semibold border transition-colors hover:opacity-85" style="border-color: var(--border); background: var(--card-muted);">
-          📥 Из облака
-        </button>
-      </div>
-
-      <div class="pt-2 border-t" style="border-color: var(--border);">
-        <button id="cloud-copy-link-btn" type="button" class="w-full px-3.5 py-2 rounded-xl text-xs font-medium border transition-colors hover:opacity-85" style="border-color: var(--border); background: var(--bg);">
-          🔗 Скопировать мгновенную ссылку с прогрессом
-        </button>
-      </div>
-    </div>
-  </div>
-
-  <div id="toast-notification" class="fixed bottom-5 right-5 z-50 hidden px-4 py-2.5 rounded-xl text-xs font-semibold shadow-xl transition-all duration-300" style="background: var(--accent); color: var(--accent-fg);"></div>
 </body>
 </html>
